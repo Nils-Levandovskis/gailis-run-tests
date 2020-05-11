@@ -49,7 +49,8 @@ namespace GailisRunTests
                         var startInfo = new ProcessStartInfo
                         {
                             WorkingDirectory = fullPath,
-                            FileName = exeFilePath
+                            FileName = exeFilePath,
+                            RedirectStandardError = true
                         };
 
                         //test case excel workbook
@@ -77,21 +78,16 @@ namespace GailisRunTests
                             //move each tracker down, as first cell in each column is reserved for its title
 
                             //TEST CASE
-                            Cell input = new Cell(0, 0);
-                            input.Down();
+                            Cell input = new Cell(2, 0);
 
-                            Cell expectedOut = new Cell(0, 1);
-                            expectedOut.Down();
+                            Cell expectedOut = new Cell(2, 1);
 
                             //RESULT 
-                            Cell actualOut = new Cell(0, 2);
-                            actualOut.Down();
+                            Cell actualOut = new Cell(2, 2);
 
-                            Cell result = new Cell(0, 3);
-                            result.Down();
+                            Cell result = new Cell(2, 3);
 
-                            Cell exception = new Cell(0, 4);
-                            exception.Down();
+                            Cell exception = new Cell(2, 4);
 
                             string temp1;
                             string temp2;
@@ -108,9 +104,9 @@ namespace GailisRunTests
                                 exception.Down();
                             }
 
-                            actualOut.ZeroIndexSet(1, 2);
-                            result.ZeroIndexSet(1, 3);
-                            exception.ZeroIndexSet(1, 4);
+                            actualOut.ZeroIndexSet(2, 2);
+                            result.ZeroIndexSet(2, 3);
+                            exception.ZeroIndexSet(2, 4);
 
                             using (System.IO.StreamWriter file = new System.IO.StreamWriter(inputFilePath))
                             {
@@ -140,11 +136,13 @@ namespace GailisRunTests
                                 using (StreamReader file = new StreamReader(outputFilePath))
                                 {
                                     string outputLine;
+                                    outputLine = file.ReadLine();
                                     string expectedLine;
-                                    while ((outputLine = file.ReadLine()) != null)
+                                    expectedLine = ex.ReadCell(expectedOut);
+                                    while (!string.IsNullOrEmpty(outputLine) || !string.IsNullOrEmpty(expectedLine))
                                     {
                                         ex.AlterCell(actualOut, outputLine);
-                                        if ((expectedLine = ex.ReadCell(expectedOut)) == outputLine)
+                                        if (expectedLine == outputLine)
                                         {
                                             ex.AlterCell(result, "PASS");
                                         }
@@ -155,6 +153,8 @@ namespace GailisRunTests
                                         expectedOut.Down();
                                         actualOut.Down();
                                         result.Down();
+                                        outputLine = file.ReadLine();
+                                        expectedLine = ex.ReadCell(expectedOut);
                                     }
                                 }
                             }
