@@ -1,11 +1,14 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using Microsoft.Office.Interop.Excel;
 using _Excel = Microsoft.Office.Interop.Excel;
-
+/*
+ Basic excel workbook manipulation functionality
+     */
 namespace GailisRunTests
 {
     class Excel
@@ -13,16 +16,10 @@ namespace GailisRunTests
         string path = "";
         _Application excel = new _Excel.Application();
         private bool isOpen;
-        Workbook wb;
-        Worksheet ws;
-        public Workbook Wb { get => wb; set => wb = value; }
-        public Worksheet Ws { get => ws; set => ws = value; }
+        public Workbook Wb { get; set; }
+        public Worksheet Ws { get; set; }
         public bool IsOpen { get => isOpen; }
 
-        //public Excel()
-        //{
-
-        //}
         public Excel(string path, int sheet)
         {
             this.path = path ?? throw new ArgumentNullException(nameof(path));
@@ -104,10 +101,25 @@ namespace GailisRunTests
         {
             Wb.Save();
         }
+        public bool SaveAs(string fileName)
+        {
+            try
+            {
+                string filePath = Path.GetFullPath(fileName);
+                Wb.SaveCopyAs(filePath);
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine("{0}: {1}", e.Message, e.ToString());
+                return false;
+            }
+            return true;
+
+        }
         public void Close()
         {
             isOpen = false;
-            wb.Close(0);
+            Wb.Close(0);
             excel.Quit();
         }
         ~Excel()
@@ -115,7 +127,7 @@ namespace GailisRunTests
             if (isOpen)
             {
                 Console.WriteLine(path);
-                wb.Close(0);
+                Wb.Close(0);
                 excel.Quit();
             }
         }

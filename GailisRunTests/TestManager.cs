@@ -12,125 +12,160 @@ namespace GailisRunTests
 {
     static class TestManager
     {
-
-
         private static readonly string mainDirectoryPath = System.IO.Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location);
-        public static string MainDirectoryPath => mainDirectoryPath;
-
+        private static string MainDirectoryPath => mainDirectoryPath;
         static void Main(string[] args)
         {
-
-            //Regex ext = new Regex(@"^i\d\d*$");
-            //get containing directory of exe
-            DirectoryInfo di = new DirectoryInfo(MainDirectoryPath);
-            //get subdirs of containing directory
-            var directories = di.GetDirectories();
-            if (directories.Count() > 0)
+            /*Find and prepare master excel test case file*/
+            string MainExcelPath = MainDirectoryPath + "\\gailisTest.xlsx";
+            if (File.Exists(MainExcelPath))
             {
-                foreach (var directory in directories)
+                DirectoryInfo di = new DirectoryInfo(MainDirectoryPath);
+                Excel main_excel = new Excel(MainExcelPath, 1);
+                //Clear master test case file result fields
+                foreach (Worksheet sheet in main_excel.Wb.Worksheets)
                 {
-                    //fullpath - path to subdirectory
-                    string fullPath = Path.GetFullPath(directory.FullName).TrimEnd(Path.DirectorySeparatorChar);
+                    main_excel.ChangeSheet(sheet.Index, false);
+                    Cell actualOut = new Cell(2, 2);
+                    Cell result = new Cell(2, 3);
+                    Cell exception = new Cell(2, 4);
+                    while ((_ = main_excel.ReadCell(actualOut)) != "" || (_ = main_excel.ReadCell(result)) != "" || (_ = main_excel.ReadCell(exception)) != "")
+                    {
+                        main_excel.AlterCell(actualOut, string.Empty);
+                        main_excel.AlterCell(result, string.Empty);
+                        main_excel.AlterCell(exception, string.Empty);
 
-                    //projectName - name of subdirectory
-                    string projectName = fullPath.Split(Path.DirectorySeparatorChar).Last();
+                        actualOut.Down();
+                        result.Down();
+                        exception.Down();
+                    }
+                }
+                main_excel.Save();
+                /*Paste master test case file into test directories*/
+                List<(string, string)> exe_excel_map = new List<(string, string)>();
+                //Test files are marked by a timestamp
+                DateTime local = DateTime.Now;
+                string time_signature = local.ToString("ddMMyyyy") + "_" + local.ToString("HHmmss");
+                //Try pasting master test case file and add exe - excel pairs to mapping if successful
+                foreach (DirectoryInfo dir in di.GetDirectories())
+                {
+                    //Name new files gailisTest_DIR_TIMESTAMP
+                    string fullPath = Path.GetFullPath(dir.FullName).TrimEnd(Path.DirectorySeparatorChar);
+                    string dirName = fullPath.Split(Path.DirectorySeparatorChar).Last();
+                    string testFilePath = fullPath + "\\gailisTest_" + dirName + "_" + time_signature + ".xlsx";
+                    string exeFilePath = fullPath + "\\gailis_" + dirName + "exe";
+                    if (File.Exists(exeFilePath))
+                    {
+                        try
+                        {
+                            if (main_excel.SaveAs(testFilePath))
+                            {
+                                Console.WriteLine("Saved to {0} successfully", testFilePath);
+                                exe_excel_map.Add((fullPath, dirName));
+                            }
+                            else
+                            {
+                                Console.WriteLine("Failed to save to {0}", testFilePath);
+                            }
+                        }
+                        catch (Exception e)
+                        {
+                            Console.WriteLine("Exception thrown while saving to {0}", testFilePath);
+                            main_excel.Close();
+                            throw;
+                        }
+                    }
+                    else
+                    {
+                        Console.WriteLine("Failed to find exe at {0} while saving test xlsx copies",exeFilePath);
+                    }
+                }
+                main_excel.Close();
+                /*Run test cases for each successful exe - excel mapping*/
+                foreach ((string, string) mapping in exe_excel_map)
+                {
+                    string inputFilePath = mapping.Item1 + "\\gailis.in";
+                    string outputFilePath = mapping.Item1 + "\\gailis.out";
 
-                    //exeName - gailis_[projectName]
-                    string exeFilePath = fullPath + "\\gailis_" + projectName + ".exe";
-
-                    //testBookName - gailisTest_[projectName]
-                    string testFilePath = fullPath + "\\gailisTest_" + projectName + ".xlsx";
-
-                    //If subdir name compliant exe and testcase xlsx exist
-
+                    string testFilePath = mapping.Item1 + "\\gailisTest_" + mapping.Item2 + "_" + time_signature + ".xlsx";
+                    string exeFilePath = mapping.Item1 + "\\gailis_" + mapping.Item2 + "exe";
 
                     if (File.Exists(exeFilePath) && File.Exists(testFilePath))
                     {
+                        //Define test exe launch options
                         var startInfo = new ProcessStartInfo
                         {
-                            WorkingDirectory = fullPath,
+                            WorkingDirectory = mapping.Item1,
                             FileName = exeFilePath,
+                            UseShellExecute = false,
                             RedirectStandardError = true
                         };
-
-                        //test case excel workbook
+                        //Test case excel workbook
                         Excel ex = new Excel(testFilePath, 1);
-                        string inputFilePath = fullPath + "\\gailis.in";
-
-                        //create input file if it doesn't exist; this isn't subdir name compliant
-
+                        //Prepare input/output files
                         if (!File.Exists(inputFilePath))
                         {
                             var f = File.Create(inputFilePath);
                             f.Close();
                         }
 
+                        if (!File.Exists(outputFilePath))
+                        {
+                            var f = File.Create(outputFilePath);
+                            f.Close();
+                        }
+                        /*Execute test cases*/
                         //Each worksheet symbolizes a test case
                         foreach (Worksheet sheet in ex.Wb.Worksheets)
                         {
                             //Select current sheet
                             ex.ChangeSheet(sheet.Index, false);
-
-                            //Prepare clear input file
+                            //Clear input and output files
                             File.WriteAllText(inputFilePath, string.Empty);
-
+                            File.WriteAllText(outputFilePath, string.Empty);
                             //Initialize cell trackers
-                            //move each tracker down, as first cell in each column is reserved for its title
-
                             //TEST CASE
                             Cell input = new Cell(2, 0);
-
                             Cell expectedOut = new Cell(2, 1);
-
                             //RESULT 
                             Cell actualOut = new Cell(2, 2);
-
                             Cell result = new Cell(2, 3);
-
                             Cell exception = new Cell(2, 4);
-
-                            string temp1;
-                            string temp2;
-                            string temp3;
-
-                            while ((temp1 = ex.ReadCell(actualOut)) != "" || (temp2 = ex.ReadCell(result)) != "" || (temp3 = ex.ReadCell(exception)) != "")
-                            {
-                                ex.AlterCell(actualOut, string.Empty);
-                                ex.AlterCell(result, string.Empty);
-                                ex.AlterCell(exception, string.Empty);
-
-                                actualOut.Down();
-                                result.Down();
-                                exception.Down();
-                            }
-
-                            actualOut.ZeroIndexSet(2, 2);
-                            result.ZeroIndexSet(2, 3);
-                            exception.ZeroIndexSet(2, 4);
-
-                            using (System.IO.StreamWriter file = new System.IO.StreamWriter(inputFilePath))
+                            //Write test case input field to input file
+                            using (StreamWriter file = new StreamWriter(inputFilePath))
                             {
                                 string inputLine = ex.ReadCell(input);
+                                string data = "";
                                 while (inputLine != "")
                                 {
-                                    file.WriteLine(inputLine);
+                                    file.WriteLine(data);
                                     input.Down();
                                     inputLine = ex.ReadCell(input);
                                 }
-
+                                file.Write(data);
                             }
+                            /*Run process with test case input*/
                             try
                             {
-                                Process.Start(startInfo).WaitForExit(5000);
+                                using (Process p = new Process())
+                                {
+                                    p.StartInfo = startInfo;
+                                    p.Start();
+                                    string errors = p.StandardError.ReadToEnd();
+                                    if (!p.WaitForExit(30000))//30 second timeout
+                                    {
+                                        p.Kill();
+                                        ex.AlterCell(exception, "Timed Out");
+                                        exception.Down();
+                                    }
+                                    ex.AlterCell(exception, errors);
+                                }
                             }
                             catch (Exception e)
                             {
-                                ex.AlterCell(exception, e.Message);
-                                exception.Down();
+                                Console.WriteLine(mapping.Item1 + " failed test case: " + sheet.Name + " with error: " + e.Message);
                             }
-
-                            string outputFilePath = fullPath + "\\gailis.out";
-
+                            /*Write output and test result to file*/
                             if (File.Exists(outputFilePath))
                             {
                                 using (StreamReader file = new StreamReader(outputFilePath))
@@ -166,12 +201,15 @@ namespace GailisRunTests
                         }
                         ex.Close();
                     }
-                    else Console.WriteLine("exe not found at: " + fullPath);
+                    else
+                    {
+                        Console.WriteLine("exe not found at: " + mapping.Item1);
+                    }
                 }
             }
             else
             {
-                Console.WriteLine("No test subdirectories specified in: " + di.FullName);
+                Console.WriteLine("Main excel file not found");
             }
         }
     }

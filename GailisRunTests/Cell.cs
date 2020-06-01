@@ -3,7 +3,9 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
-
+/*
+ X,Y coordinate class to interface with excel cells
+*/
 namespace GailisRunTests
 {
     class Cell
