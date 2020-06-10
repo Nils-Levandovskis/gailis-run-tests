@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading.Tasks;
 using Microsoft.Office.Interop.Excel;
@@ -121,14 +122,21 @@ namespace GailisRunTests
             isOpen = false;
             Wb.Close(0);
             excel.Quit();
+            Marshal.FinalReleaseComObject(Ws);
+            Marshal.FinalReleaseComObject(Wb);
+            Marshal.FinalReleaseComObject(excel);
+            Console.WriteLine("Closed {0} via Close()", path);
         }
         ~Excel()
         {
             if (isOpen)
             {
-                Console.WriteLine(path);
                 Wb.Close(0);
                 excel.Quit();
+                Marshal.FinalReleaseComObject(Ws);
+                Marshal.FinalReleaseComObject(Wb);
+                Marshal.FinalReleaseComObject(excel);
+                Console.WriteLine("Closed {0} via destructor", path);
             }
         }
     }

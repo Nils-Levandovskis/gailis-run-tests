@@ -23,21 +23,50 @@ namespace GailisRunTests
                 DirectoryInfo di = new DirectoryInfo(MainDirectoryPath);
                 Excel main_excel = new Excel(MainExcelPath, 1);
                 //Clear master test case file result fields
-                foreach (Worksheet sheet in main_excel.Wb.Worksheets)
+                List<string> tests = new List<string>();
+                Console.WriteLine("Generate test cases from master? y/n:");
+                if (Console.ReadLine() == "y")
                 {
-                    main_excel.ChangeSheet(sheet.Index, false);
-                    Cell actualOut = new Cell(2, 2);
-                    Cell result = new Cell(2, 3);
-                    Cell exception = new Cell(2, 4);
-                    while ((_ = main_excel.ReadCell(actualOut)) != "" || (_ = main_excel.ReadCell(result)) != "" || (_ = main_excel.ReadCell(exception)) != "")
+                    foreach (Worksheet sheet in main_excel.Wb.Worksheets)
                     {
-                        main_excel.AlterCell(actualOut, string.Empty);
-                        main_excel.AlterCell(result, string.Empty);
-                        main_excel.AlterCell(exception, string.Empty);
-
-                        actualOut.Down();
-                        result.Down();
-                        exception.Down();
+                        string testPath = MainDirectoryPath + "\\" + sheet.Name + ".txt";
+                        main_excel.ChangeSheet(sheet.Index, false);
+                        Cell input = new Cell(2, 0);
+                        using (StreamWriter outputFile = new StreamWriter(testPath))
+                        {
+                            while (main_excel.ReadCell(input) != "")
+                            {
+                                outputFile.WriteLine(main_excel.ReadCell(input));
+                                input.Down();
+                            }
+                        }
+                        tests.Add(testPath);
+                       
+                    }
+                }
+                else
+                {
+                    foreach (Worksheet sheet in main_excel.Wb.Worksheets)
+                    {
+                        string testPath = MainDirectoryPath + "\\" + sheet.Name + ".txt";
+                        if (File.Exists(testPath))
+                        {
+                            tests.Add(testPath);
+                        }
+                        else
+                        {
+                            Console.WriteLine("Couldn't find test case for {0}. Generating...", sheet.Name);
+                            Cell input = new Cell(2, 0);
+                            using (StreamWriter outputFile = new StreamWriter(testPath))
+                            {
+                                while (main_excel.ReadCell(input) != "")
+                                {
+                                    outputFile.WriteLine(main_excel.ReadCell(input));
+                                    input.Down();
+                                }
+                            }
+                            tests.Add(testPath);
+                        }
                     }
                 }
                 main_excel.Save();
@@ -53,7 +82,7 @@ namespace GailisRunTests
                     string fullPath = Path.GetFullPath(dir.FullName).TrimEnd(Path.DirectorySeparatorChar);
                     string dirName = fullPath.Split(Path.DirectorySeparatorChar).Last();
                     string testFilePath = fullPath + "\\gailisTest_" + dirName + "_" + time_signature + ".xlsx";
-                    string exeFilePath = fullPath + "\\gailis_" + dirName + "exe";
+                    string exeFilePath = fullPath + "\\gailis_" + dirName + ".exe";
                     if (File.Exists(exeFilePath))
                     {
                         try
@@ -77,7 +106,7 @@ namespace GailisRunTests
                     }
                     else
                     {
-                        Console.WriteLine("Failed to find exe at {0} while saving test xlsx copies",exeFilePath);
+                        Console.WriteLine("Failed to find exe at {0} while saving test xlsx copies", exeFilePath);
                     }
                 }
                 main_excel.Close();
@@ -88,7 +117,7 @@ namespace GailisRunTests
                     string outputFilePath = mapping.Item1 + "\\gailis.out";
 
                     string testFilePath = mapping.Item1 + "\\gailisTest_" + mapping.Item2 + "_" + time_signature + ".xlsx";
-                    string exeFilePath = mapping.Item1 + "\\gailis_" + mapping.Item2 + "exe";
+                    string exeFilePath = mapping.Item1 + "\\gailis_" + mapping.Item2 + ".exe";
 
                     if (File.Exists(exeFilePath) && File.Exists(testFilePath))
                     {
@@ -105,99 +134,103 @@ namespace GailisRunTests
                         //Prepare input/output files
                         if (!File.Exists(inputFilePath))
                         {
-                            var f = File.Create(inputFilePath);
-                            f.Close();
+                            FileStream f = File.Create(inputFilePath);
+                            f.Dispose();
                         }
 
                         if (!File.Exists(outputFilePath))
                         {
-                            var f = File.Create(outputFilePath);
-                            f.Close();
+                            FileStream f = File.Create(outputFilePath);
+                            f.Dispose();
                         }
                         /*Execute test cases*/
+
+
                         //Each worksheet symbolizes a test case
                         foreach (Worksheet sheet in ex.Wb.Worksheets)
                         {
-                            //Select current sheet
-                            ex.ChangeSheet(sheet.Index, false);
-                            //Clear input and output files
-                            File.WriteAllText(inputFilePath, string.Empty);
-                            File.WriteAllText(outputFilePath, string.Empty);
-                            //Initialize cell trackers
-                            //TEST CASE
-                            Cell input = new Cell(2, 0);
-                            Cell expectedOut = new Cell(2, 1);
-                            //RESULT 
-                            Cell actualOut = new Cell(2, 2);
-                            Cell result = new Cell(2, 3);
-                            Cell exception = new Cell(2, 4);
-                            //Write test case input field to input file
-                            using (StreamWriter file = new StreamWriter(inputFilePath))
+                            string test = tests.Find(x => Path.GetFileNameWithoutExtension(x) == sheet.Name);
+                            if (test != null)
                             {
-                                string inputLine = ex.ReadCell(input);
-                                string data = "";
-                                while (inputLine != "")
+
+                                //Select current sheet
+                                ex.ChangeSheet(sheet.Index, false);
+                                File.Copy(test, inputFilePath, true);
+                                //Clear output file
+                                using (StreamWriter writer = new StreamWriter(outputFilePath, false))
                                 {
-                                    file.WriteLine(data);
-                                    input.Down();
-                                    inputLine = ex.ReadCell(input);
+                                    writer.Close();
                                 }
-                                file.Write(data);
-                            }
-                            /*Run process with test case input*/
-                            try
-                            {
-                                using (Process p = new Process())
+
+                                //Initialize cell trackers
+                                Cell expectedOut = new Cell(2, 1);
+                                Cell actualOut = new Cell(2, 2);
+                                Cell result = new Cell(2, 3);
+                                Cell exception = new Cell(2, 4);
+                                //Write test case input field to input file
+
+                                /*Run process with test case input*/
+                                try
                                 {
-                                    p.StartInfo = startInfo;
-                                    p.Start();
-                                    string errors = p.StandardError.ReadToEnd();
-                                    if (!p.WaitForExit(30000))//30 second timeout
+                                    using (Process p = new Process())
                                     {
-                                        p.Kill();
-                                        ex.AlterCell(exception, "Timed Out");
-                                        exception.Down();
+                                        p.StartInfo = startInfo;
+                                        p.Start();
+                                        //p.BeginOutputReadLine();
+                                        StreamReader sr = p.StandardError;
+                                        string errors = sr.ReadLine();
+                                        if (!p.WaitForExit(30000))//30 second timeout
+                                        {
+                                            ex.AlterCell(exception, "Timed Out");
+                                            exception.Down();
+                                            p.Kill();
+                                        }
+                                        ex.AlterCell(exception, errors);
+
                                     }
-                                    ex.AlterCell(exception, errors);
                                 }
-                            }
-                            catch (Exception e)
-                            {
-                                Console.WriteLine(mapping.Item1 + " failed test case: " + sheet.Name + " with error: " + e.Message);
-                            }
-                            /*Write output and test result to file*/
-                            if (File.Exists(outputFilePath))
-                            {
-                                using (StreamReader file = new StreamReader(outputFilePath))
+                                catch (Exception e)
                                 {
-                                    string outputLine;
-                                    outputLine = file.ReadLine();
-                                    string expectedLine;
-                                    expectedLine = ex.ReadCell(expectedOut);
-                                    while (!string.IsNullOrEmpty(outputLine) || !string.IsNullOrEmpty(expectedLine))
+                                    Console.WriteLine(mapping.Item1 + " failed test case: " + sheet.Name + " with error: " + e.Message);
+                                }
+                                /*Write output and test result to file*/
+                                if (File.Exists(outputFilePath))
+                                {
+                                    using (StreamReader file = new StreamReader(outputFilePath))
                                     {
-                                        ex.AlterCell(actualOut, outputLine);
-                                        if (expectedLine == outputLine)
-                                        {
-                                            ex.AlterCell(result, "PASS");
-                                        }
-                                        else
-                                        {
-                                            ex.AlterCell(result, "FAIL");
-                                        }
-                                        expectedOut.Down();
-                                        actualOut.Down();
-                                        result.Down();
+                                        string outputLine;
                                         outputLine = file.ReadLine();
+                                        string expectedLine;
                                         expectedLine = ex.ReadCell(expectedOut);
+                                        while (!string.IsNullOrEmpty(outputLine) || !string.IsNullOrEmpty(expectedLine))
+                                        {
+                                            ex.AlterCell(actualOut, outputLine);
+                                            if (expectedLine == outputLine)
+                                            {
+                                                ex.AlterCell(result, "PASS");
+                                            }
+                                            else
+                                            {
+                                                ex.AlterCell(result, "FAIL");
+                                            }
+                                            expectedOut.Down();
+                                            actualOut.Down();
+                                            result.Down();
+                                            outputLine = file.ReadLine();
+                                            expectedLine = ex.ReadCell(expectedOut);
+                                        }
                                     }
                                 }
+                                else
+                                {
+                                    ex.AlterCell(exception, "Output not found");
+                                }
+                                ex.Save();
                             }
                             else
                             {
-                                ex.AlterCell(exception, "Output not found");
+                                Console.WriteLine("Couldn't find file for test case: {0}", sheet.Name);
                             }
-                            ex.Save();
                         }
                         ex.Close();
                     }
